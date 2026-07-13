@@ -1,0 +1,18 @@
+services:
+  captain-snow:
+    build: .
+    container_name: captain-snow
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Long-term memory (sqlite + chroma) survives restarts and rebuilds
+      - captainsnow_memory:/app/captainsnow_memory
+    # Keep the crew small: the agent idles around 200-300MB — this cap just
+    # stops a runaway dependency from eating the whole boat.
+    mem_limit: 1g
+
+volumes:
+  captainsnow_memory:

@@ -1,0 +1,155 @@
+<svg width="520" height="520" viewBox="0 0 520 520" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bgGlow" cx="50%" cy="42%" r="65%">
+      <stop offset="0%" stop-color="#0e2a47"/>
+      <stop offset="55%" stop-color="#081a30"/>
+      <stop offset="100%" stop-color="#040d1a"/>
+    </radialGradient>
+    <linearGradient id="iceSkull" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#eaf6ff"/>
+      <stop offset="55%" stop-color="#bfe3f7"/>
+      <stop offset="100%" stop-color="#8fc7e8"/>
+    </linearGradient>
+    <linearGradient id="hat" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#12365c"/>
+      <stop offset="100%" stop-color="#0a2340"/>
+    </linearGradient>
+    <linearGradient id="hatTrim" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#5ec8f0"/>
+      <stop offset="50%" stop-color="#a8e6ff"/>
+      <stop offset="100%" stop-color="#5ec8f0"/>
+    </linearGradient>
+    <linearGradient id="icicle" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#cfeeff"/>
+      <stop offset="100%" stop-color="#6db8dd" stop-opacity="0.35"/>
+    </linearGradient>
+    <filter id="frost" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="1.1"/>
+    </filter>
+    <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- background -->
+  <circle cx="260" cy="260" r="252" fill="url(#bgGlow)"/>
+  <circle cx="260" cy="260" r="252" fill="none" stroke="#1d4a73" stroke-width="6"/>
+  <circle cx="260" cy="260" r="243" fill="none" stroke="#5ec8f0" stroke-width="2" opacity="0.55"/>
+
+  <!-- drifting snow -->
+  <g fill="#dff2ff">
+    <circle cx="96" cy="132" r="3.2" opacity="0.85"/>
+    <circle cx="150" cy="86" r="2.2" opacity="0.6"/>
+    <circle cx="418" cy="120" r="2.8" opacity="0.8"/>
+    <circle cx="452" cy="196" r="2" opacity="0.5"/>
+    <circle cx="70" cy="250" r="2.4" opacity="0.6"/>
+    <circle cx="447" cy="300" r="2.6" opacity="0.65"/>
+    <circle cx="120" cy="382" r="2.2" opacity="0.5"/>
+    <circle cx="396" cy="398" r="3" opacity="0.7"/>
+    <circle cx="330" cy="70" r="2" opacity="0.55"/>
+    <circle cx="212" cy="58" r="2.4" opacity="0.6"/>
+  </g>
+
+  <!-- crossed cutlasses behind skull -->
+  <g stroke-linecap="round">
+    <g transform="rotate(-38 260 300)">
+      <rect x="252" y="128" width="16" height="300" rx="8" fill="#9fd4ec"/>
+      <rect x="252" y="128" width="7" height="300" rx="3.5" fill="#e8f7ff"/>
+      <rect x="236" y="398" width="48" height="14" rx="7" fill="#1d4a73"/>
+      <rect x="248" y="410" width="24" height="34" rx="10" fill="#12365c"/>
+    </g>
+    <g transform="rotate(38 260 300)">
+      <rect x="252" y="128" width="16" height="300" rx="8" fill="#9fd4ec"/>
+      <rect x="252" y="128" width="7" height="300" rx="3.5" fill="#e8f7ff"/>
+      <rect x="236" y="398" width="48" height="14" rx="7" fill="#1d4a73"/>
+      <rect x="248" y="410" width="24" height="34" rx="10" fill="#12365c"/>
+    </g>
+  </g>
+
+  <!-- skull -->
+  <g>
+    <!-- cranium -->
+    <path d="M260 128
+             c -74 0 -118 52 -118 116
+             c 0 34 14 60 34 78
+             c 8 7 10 16 10 26
+             l 0 22
+             c 0 16 12 30 30 30
+             l 88 0
+             c 18 0 30 -14 30 -30
+             l 0 -22
+             c 0 -10 2 -19 10 -26
+             c 20 -18 34 -44 34 -78
+             c 0 -64 -44 -116 -118 -116 z"
+          fill="url(#iceSkull)" stroke="#5a97b8" stroke-width="4"/>
+
+    <!-- cheek cracks -->
+    <path d="M180 262 l 14 10 l -6 14" fill="none" stroke="#7fb3d0" stroke-width="3" stroke-linecap="round"/>
+    <path d="M344 258 l -16 12 l 8 14" fill="none" stroke="#7fb3d0" stroke-width="3" stroke-linecap="round"/>
+
+    <!-- eye sockets: angry slant -->
+    <path d="M172 216 l 74 22 c 6 26 -10 44 -34 44 c -26 0 -44 -20 -44 -44 c 0 -8 1 -16 4 -22 z" fill="#071523"/>
+    <path d="M348 216 l -74 22 c -6 26 10 44 34 44 c 26 0 44 -20 44 -44 c 0 -8 -1 -16 -4 -22 z" fill="#071523"/>
+    <!-- glowing ice pupils -->
+    <circle cx="216" cy="252" r="9" fill="#6fe3ff" filter="url(#glow)"/>
+    <circle cx="304" cy="252" r="9" fill="#6fe3ff" filter="url(#glow)"/>
+
+    <!-- nose -->
+    <path d="M260 268 l -16 34 c -2 6 2 12 8 12 l 16 0 c 6 0 10 -6 8 -12 z" fill="#071523"/>
+
+    <!-- teeth -->
+    <g fill="#071523">
+      <rect x="216" y="352" width="12" height="30" rx="5"/>
+      <rect x="238" y="352" width="12" height="34" rx="5"/>
+      <rect x="260" y="352" width="12" height="34" rx="5"/>
+      <rect x="282" y="352" width="12" height="30" rx="5"/>
+    </g>
+
+    <!-- scar -->
+    <g stroke="#7fb3d0" stroke-width="3.5" stroke-linecap="round">
+      <path d="M300 168 l 30 34"/>
+      <path d="M306 182 l 12 -10"/>
+      <path d="M316 194 l 12 -10"/>
+    </g>
+  </g>
+
+  <!-- icicles hanging from hat brim -->
+  <g fill="url(#icicle)">
+    <path d="M158 172 l 7 42 l 8 -42 z"/>
+    <path d="M186 178 l 6 30 l 7 -30 z"/>
+    <path d="M330 178 l 6 32 l 7 -32 z"/>
+    <path d="M354 172 l 7 44 l 8 -44 z"/>
+    <path d="M262 184 l 6 26 l 7 -26 z"/>
+  </g>
+
+  <!-- tricorn hat -->
+  <g>
+    <path d="M132 178
+             c 10 -66 60 -104 128 -104
+             c 68 0 118 38 128 104
+             c -22 -16 -60 -26 -128 -26
+             c -68 0 -106 10 -128 26 z"
+          fill="url(#hat)" stroke="#0a2340" stroke-width="4"/>
+    <!-- upturned brim edges -->
+    <path d="M132 178 c -12 -34 -4 -62 12 -78 c -4 30 2 52 16 64 z" fill="#0e2c4e" stroke="#0a2340" stroke-width="3"/>
+    <path d="M388 178 c 12 -34 4 -62 -12 -78 c 4 30 -2 52 -16 64 z" fill="#0e2c4e" stroke="#0a2340" stroke-width="3"/>
+    <!-- frost trim -->
+    <path d="M136 170 c 26 -16 62 -24 124 -24 c 62 0 98 8 124 24" fill="none" stroke="url(#hatTrim)" stroke-width="7" stroke-linecap="round" filter="url(#frost)"/>
+    <!-- snow cap on hat -->
+    <path d="M196 92 c 18 -12 42 -18 64 -18 c 22 0 46 6 64 18 c -12 10 -20 6 -32 2 c -10 -4 -14 6 -26 6 c -12 0 -14 -8 -26 -6 c -12 4 -30 8 -44 -2 z" fill="#eaf6ff" opacity="0.95"/>
+    <!-- hat emblem: snowflake -->
+    <g transform="translate(260 126)" stroke="#a8e6ff" stroke-width="5" stroke-linecap="round" filter="url(#glow)">
+      <line x1="0" y1="-20" x2="0" y2="20"/>
+      <line x1="-17" y1="-10" x2="17" y2="10"/>
+      <line x1="-17" y1="10" x2="17" y2="-10"/>
+      <line x1="0" y1="-20" x2="-6" y2="-14"/>
+      <line x1="0" y1="-20" x2="6" y2="-14"/>
+      <line x1="0" y1="20" x2="-6" y2="14"/>
+      <line x1="0" y1="20" x2="6" y2="14"/>
+    </g>
+  </g>
+</svg>

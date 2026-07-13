@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  syntax:
+    name: Compile check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Fast, dependency-free gate: every module must at least parse.
+      - name: Byte-compile all sources
+        run: python -m compileall -q captainsnow
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Grep for key-shaped strings
+        run: |
+          ! grep -rnE "(sk-[a-zA-Z0-9_-]{20,}|gsk_[0-9A-Za-z]{20,}|AIza[0-9A-Za-z_-]{30,}|ghp_[0-9A-Za-z]{30,}|xoxb-|AKIA[0-9A-Z]{12,}|[0-9]{8,10}:[A-Za-z0-9_-]{35})" \
+            --exclude-dir=.git --exclude-dir=.github .
+
+  docker:
+    name: Docker build (slim image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build default image
+        run: docker build -t captain-snow:ci .

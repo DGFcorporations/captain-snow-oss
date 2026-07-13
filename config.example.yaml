@@ -1,0 +1,193 @@
+user:
+  name: "Captain"
+  business: "Your Business"
+  preferred_ai_model: "openrouter"   # cloud-first by default — see README for why
+
+# ── Agent Behavior ──────────────────────────────────────────────────────────
+agent:
+  lazy_mode: true          # Zero idle cost — no background LLM calls when quiet
+  ollama_keep_alive: "5m"  # Only used if you run Ollama for local dev
+
+# ── Persona ─────────────────────────────────────────────────────────────────
+persona:
+  name: "Captain Snow"
+  role: "Personal AI assistant and business operator"
+  personality: "Direct, resourceful, and dependable. Gets things done without fuss."
+  tone: "Professional but approachable — like a trusted first mate"
+  style: "Concise responses. Occasionally uses nautical flavor. Never wastes words."
+  owner: "Captain"
+
+# ── LLM Providers ─────────────────────────────────────────────────────────────
+# Default routing is cloud-first: free tiers (OpenRouter/Qwen/Groq/Gemini) are
+# tried before anything paid, and "local" is skipped entirely unless you set
+# models.local.server_url below. This keeps the default footprint tiny —
+# no compiled binary, no multi-GB model file, runs fine on a phone or a $5 VPS.
+#
+# Real secrets come from environment variables. The `${VAR}` syntax is
+# expanded by core/profile.py at load time — never put real keys in this file.
+models:
+  # OPTIONAL — local GGUF inference via a llama-server sidecar. Leave
+  # server_url blank/commented to skip local inference entirely (recommended
+  # default). See Dockerfile.local and the README's "Local inference" section
+  # before enabling this — it adds ~1GB of disk and ~1.5-2GB of RAM.
+  local:
+    model_path: "/app/models/Qwen3-1.7B-Q4_K_M.gguf"
+    # server_url: "http://127.0.0.1:8081/v1"
+    n_ctx: 4096
+    temperature: 0.2
+
+  # Ollama is only used for local dev on a machine that already runs Ollama.
+  # Blank host → skipped automatically.
+  ollama:
+    host: ""
+    model: "qwen2.5:1.5b"
+
+  openrouter:
+    api_key: "${OPENROUTER_API_KEY}"
+    model: "meta-llama/llama-3.3-70b-instruct:free"
+
+  qwen:
+    api_key: "${QWEN_API_KEY}"
+    model: "qwen-plus"
+
+  groq:
+    api_key: "${GROQ_API_KEY}"
+    model: "llama-3.3-70b-versatile"
+
+  deepseek:
+    api_key: "${DEEPSEEK_API_KEY}"
+    model: "deepseek-chat"
+
+  gemini:
+    api_key: "${GEMINI_API_KEY}"
+    model: "gemini-2.0-flash"
+
+  kimi:
+    api_key: "${KIMI_API_KEY}"
+    model: "moonshot-v1-8k"
+
+  huggingface:
+    api_key: "${HUGGINGFACE_API_KEY}"
+    model: "Qwen/Qwen2.5-Coder-7B-Instruct"
+
+# ── Skills ───────────────────────────────────────────────────────────────────
+# Comment out any you don't need — fewer enabled skills means fewer
+# dependencies actually get exercised at runtime.
+skills:
+  enabled:
+    - seo_core
+    - browser          # needs `playwright install chromium` — see README
+    - fileops
+    - stripe
+    - content
+    - watchers
+    - email_ops
+    - airtable
+    - search
+    - planner
+    - revenue_consultant
+    - supabase_connector
+    - google_workspace
+    - route_optimizer
+
+# ── Integrations ─────────────────────────────────────────────────────────────
+integrations:
+  stripe:
+    api_key: "${STRIPE_API_KEY}"
+
+  wordpress:
+    url: "${WORDPRESS_URL}"
+    username: "${WORDPRESS_USERNAME}"
+    app_password: "${WP_APP_PASSWORD}"
+
+  ghost:
+    url: "${GHOST_URL}"
+    admin_api_key: "${GHOST_ADMIN_API_KEY}"
+
+  airtable:
+    api_key: "${AIRTABLE_API_KEY}"
+    base_id: "${AIRTABLE_BASE_ID}"
+    monitor_tables: []   # e.g. ["Leads", "Orders"] — tables the watcher polls for new rows
+
+  supabase:
+    url: "${SUPABASE_URL}"
+    key: "${SUPABASE_KEY}"
+
+  google:
+    credentials_file: "google_credentials.json"   # mount via volume if used
+    token_file: "google_token.pickle"             # auto-generated after first login
+
+  google_maps_api_key: "${GOOGLE_MAPS_API_KEY}"
+
+  search:
+    serper_api_key: "${SERPER_API_KEY}"   # Optional — falls back to DuckDuckGo free
+
+  yahoo_finance: true
+
+  notifications:
+    desktop: false   # no desktop notifications in a container
+    telegram_bot_token: "${TELEGRAM_BOT_TOKEN}"
+    telegram_chat_id: "${TELEGRAM_CHAT_ID}"
+
+# ── Authenticated site credentials ───────────────────────────────────────────
+# Use ENV:VARNAME for passwords — set that env var in your deploy environment.
+# Never put real passwords in plaintext here.
+saved_logins: []
+# Example:
+#   - name: "My Dashboard"
+#     url: "https://app.example.com/login"
+#     username: "me@email.com"
+#     password: "ENV:MY_DASHBOARD_PASSWORD"
+
+# ── Uptime monitoring ────────────────────────────────────────────────────────
+monitor_urls: []
+# Example:
+#   - "https://example.com"
+#   - "https://example.com/health"
+
+# ── Email ─────────────────────────────────────────────────────────────────────
+zoho_sender: "${ZOHO_SENDER}"
+zoho_app_password: "${ZOHO_APP_PASSWORD}"
+zoho_recipient: "${ZOHO_RECIPIENT}"
+
+# ── Telegram ─────────────────────────────────────────────────────────────────
+# IMPORTANT: telegram_owner_id is required for the bot to respond to anyone.
+# Without it the bot ignores every message (fail-closed) — it holds live
+# credentials, so an open bot is not a safe default. Message @userinfobot on
+# Telegram to find your numeric ID.
+telegram_bot_token: "${TELEGRAM_BOT_TOKEN}"
+telegram_chat_id: "${TELEGRAM_CHAT_ID}"
+telegram_owner_id: "${TELEGRAM_OWNER_ID}"
+telegram_bot_poll_interval_s: 5
+telegram_bot_long_poll_timeout_s: 25
+
+# ── Business targeting (used by seo_core / revenue_consultant prompts) ───────
+# Fill these in for your own business, or leave blank.
+target_region: ""
+target_industries: ""
+target_certifications: ""
+target_geographies: ""
+icp_segments: ""
+
+# ── Pipeline ─────────────────────────────────────────────────────────────────
+leads_per_batch: 50
+leads_to_scour: 10
+local_timezone: "America/New_York"
+run_hour_local: 7
+cycle_hours: 12
+
+# ── Quality gating ────────────────────────────────────────────────────────────
+intel_min_avg_score: 68.0
+intel_min_lead_score: 45.0
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+data_dir: "./data"
+reports_dir: "./reports"
+logs_dir: "./logs"
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+log_level: "INFO"
+
+cache:
+  enabled: true
+  ttl: 3600

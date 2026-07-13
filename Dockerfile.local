@@ -1,0 +1,74 @@
+# Captain Snow — optional "full" image with offline local inference.
+#
+# Use this instead of the default Dockerfile if you want a zero-API-cost
+# fallback that works with no internet-facing LLM calls at all — e.g. a
+# homelab box or a VPS with RAM to spare. It compiles llama.cpp and bakes in
+# a ~1GB Qwen3-1.7B model, adding roughly 1.5-2GB of resident RAM once the
+# model is loaded and several minutes to the build.
+#
+# For most users the slim default Dockerfile (cloud-first, free tiers) is
+# the better choice — it's smaller, faster to build, and the local 1.7B
+# model is meaningfully less capable than the free-tier cloud models anyway.
+#
+# Also installs Playwright's Chromium (~600MB) so the browser/login skill
+# works out of the box.
+
+FROM python:3.12-slim
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    CAPTAINSNOW_CONFIG=/app/config.yaml
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        cmake \
+        git \
+        curl \
+        ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt ./
+RUN pip install --upgrade pip && pip install -r requirements.txt
+
+RUN playwright install --with-deps chromium
+
+RUN python -c "from chromadb.utils.embedding_functions import DefaultEmbeddingFunction; DefaultEmbeddingFunction()(['warmup'])"
+
+# Compile llama-server from llama.cpp source (server target only — keeps the
+# build shorter than a full build with tests/examples).
+RUN git clone --depth 1 https://github.com/ggml-org/llama.cpp.git && \
+    cd llama.cpp && \
+    cmake -B build -DBUILD_SHARED_LIBS=OFF -DLLAMA_CURL=OFF \
+          -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF && \
+    cmake --build build --config Release -j$(nproc) --target llama-server && \
+    cp build/bin/llama-server /usr/local/bin/llama-server && \
+    cd .. && rm -rf llama.cpp
+
+# unsloth's Q4_K_M quant of the official Qwen/Qwen3-1.7B (~1.1GB).
+# NOTE: Hugging Face resolve URLs are case-sensitive.
+RUN mkdir -p /app/models && \
+    curl -L --fail -o /app/models/Qwen3-1.7B-Q4_K_M.gguf \
+        https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf
+
+COPY setup.py ./
+COPY captainsnow ./captainsnow
+RUN pip install -e . --no-deps
+
+# Uncomment models.local.server_url in your config so the router actually
+# uses the local model this image builds.
+COPY config.example.yaml ./config.yaml
+COPY start.sh ./start.sh
+RUN chmod +x ./start.sh
+
+EXPOSE 8000
+
+VOLUME ["/app/captainsnow_memory"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=120s --retries=3 \
+    CMD curl -fsS http://localhost:8000/health || exit 1
+
+CMD ["./start.sh"]
