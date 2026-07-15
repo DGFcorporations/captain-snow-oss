@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo.svg" alt="Captain Snow — the frozen pirate AI agent" width="260"/>
+<img src="assets/logo.jpg" alt="Captain Snow — the frozen pirate AI agent" width="260"/>
 
 # ⚓ Captain Snow
 
