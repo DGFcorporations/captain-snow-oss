@@ -31,7 +31,7 @@ def load_config() -> dict:
         # Loud, single startup warning — easy to spot in container logs.
         log.warning(
             "Captain Snow: %d env var(s) referenced in config.yaml are NOT SET — "
-            "set them in your deploy environment and restart: %s",
+            "set them in the host environment variables and restart: %s",
             len(missing),
             ", ".join(sorted(missing)),
         )

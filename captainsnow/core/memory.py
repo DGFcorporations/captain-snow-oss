@@ -118,7 +118,9 @@ class MemoryBank:
 
         topics = await self._extract_topics(summary)
 
-        episode_id = int(datetime.now().timestamp())
+        # Microsecond resolution: two consolidations in the same second would
+        # collide on this primary key and corrupt the Chroma id space.
+        episode_id = int(datetime.now().timestamp() * 1_000_000)
         self.db["episodes"].insert({
             "id": episode_id,
             "timestamp": datetime.now().isoformat(),

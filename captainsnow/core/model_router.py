@@ -1,32 +1,34 @@
 """
-LLM Router — local-first, free-first cascade.
+LLM Router — free-first cloud cascade.
 
 Provider priority (cost-optimised for 24/7 operation):
-  1. Local GGUF  — qwen2.5-1.5b baked into the image (zero cost, zero API calls)
-  2. Ollama      — local dev only (skipped in prod when host is blank)
-  3. OpenRouter  — free-tier model
-  4. Qwen        — DashScope free quota
-  5. Groq        — free tier (rate-limits often)
-  6. Gemini      — free tier then cheap
-  7. DeepSeek    — paid but near-free (~$0.07/M tokens)
-  8. Kimi        — Moonshot paid (last resort)
+  1. OpenRouter  — free-tier model
+  2. Qwen        — DashScope free quota
+  3. Groq        — free tier (rate-limits often)
+  4. Gemini      — free tier then cheap
+  5. DeepSeek    — paid but near-free (~$0.07/M tokens)
+  6. Kimi        — Moonshot paid (last resort)
 
-No startup probes — providers are only contacted when actually needed.
-Failed providers fall through to the next automatically.
+No local inference: the baked-in 1.7B GGUF was removed (unreliable tool
+calling — see docs/benchmarks-2026-09.md). Every remaining provider speaks
+OpenAI-compatible chat.completions *with* native `tools`/`tool_calls`, so
+the agent loop needs no fallback action protocol.
+
+Free-tier model slugs rot — providers rename and deprecate them. A dead slug
+fails silently into the next provider, so run `captainsnow doctor`
+(scripts/provider_health.py) weekly; quarterly review in the benchmarks doc.
 """
 
 from __future__ import annotations
 
 import logging
 import os
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 log = logging.getLogger(__name__)
 
 # Providers tried in this order; unconfigured providers are silently skipped.
-# Production runs in Docker with a baked-in GGUF model, so `local` is first.
-# `ollama` stays available for local dev on a machine that already runs Ollama.
-_PROVIDER_ORDER = ["local", "ollama", "openrouter", "qwen", "groq", "gemini", "deepseek", "kimi"]
+_PROVIDER_ORDER = ["openrouter", "qwen", "groq", "gemini", "deepseek", "kimi"]
 
 # OpenAI-compatible cloud providers — base_url + model config key
 _OPENAI_COMPAT = {
@@ -53,7 +55,7 @@ _OPENAI_COMPAT = {
     },
     "gemini": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai/",
-        "default_model": "gemini-2.0-flash",
+        "default_model": "gemini-2.5-flash",
     },
     "kimi": {
         "base_url": "https://api.moonshot.cn/v1",
@@ -68,8 +70,6 @@ _PLACEHOLDERS = ("_KEY", "_HERE", "OPTIONAL")
 class ModelRouter:
     def __init__(self, config: dict):
         self.config = config
-        self.local_model = None
-        self.ollama_client = None
         self.groq_client = None
         # One cached client per OpenAI-compat provider
         self._compat_clients: dict[str, Any] = {}
@@ -77,21 +77,12 @@ class ModelRouter:
     # ── Configuration helpers ─────────────────────────────────────────────
 
     def _is_configured(self, name: str) -> bool:
-        """Return True only if the provider has a real (non-placeholder) API key or host."""
+        """Return True only if the provider has a real (non-placeholder) API key."""
         cfg = self.config.get("models", {}).get(name, {})
-        if name == "ollama":
-            return bool(cfg.get("host", ""))
         api_key = cfg.get("api_key", "")
         if not api_key:
             return False
         return not any(ph in api_key for ph in _PLACEHOLDERS)
-
-    def _has_local(self) -> bool:
-        # Local inference = llama-server running as a sidecar (started by
-        # start.sh). If it's down, the query raises and the cascade falls
-        # through to cloud providers — connection-refused on loopback is
-        # instant, so a dead server costs nothing.
-        return bool(self.config.get("models", {}).get("local", {}).get("server_url", ""))
 
     # ── Public API ────────────────────────────────────────────────────────
 
@@ -118,7 +109,9 @@ class ModelRouter:
         if len(matched) == 1:
             return matched.pop()
 
-        # MUST stay in sync with _INTENT_SKILL_MAP in core/orchestrator.py.
+        # Valid categories. NOTE: classify_intent currently has no callers —
+        # the orchestrator routes everything through the agent loop. Kept for
+        # future intent-routing use.
         _valid = {
             "seo", "stripe", "browser", "login", "content", "file",
             "monitor", "email", "airtable", "search", "plan", "revenue",
@@ -147,8 +140,7 @@ class ModelRouter:
         )
         try:
             # complexity="medium" prefers configured cloud (free tiers, ~200-token
-            # prompt, near-instant) — the 1.7B local model misroutes too often to
-            # be trusted with classification. Local remains the offline fallback.
+            # prompt, near-instant).
             raw = await self.query(
                 "You are a concise intent classifier.", prompt,
                 complexity="medium", max_tokens=16,
@@ -171,7 +163,7 @@ class ModelRouter:
         use_vision: bool = False,
         max_tokens: int = 1024,
     ) -> str:
-        """Send a prompt through the provider cascade.
+        """Send a prompt through the provider cascade. Returns text content.
 
         Args:
             max_tokens: Hard cap on response length. Pass 16 for classify-style calls.
@@ -182,14 +174,46 @@ class ModelRouter:
                 return await self._call_gemini_vision(system_prompt, user_message)
             raise RuntimeError("Vision requested but Gemini is not configured.")
 
-        temperature = 0.2
-        keep_alive = self.config.get("agent", {}).get("ollama_keep_alive", "5m")
-        last_exc: Optional[Exception] = None
+        msg = await self._request(
+            system_prompt,
+            [{"role": "user", "content": user_message}],
+            complexity=complexity,
+            max_tokens=max_tokens,
+        )
+        return getattr(msg, "content", None) or ""
 
+    async def chat(
+        self,
+        system_prompt: str,
+        messages: List[dict],
+        tools: Optional[List[dict]] = None,
+        complexity: str = "high",
+        max_tokens: int = 4096,
+    ) -> dict:
+        """Multi-turn chat with optional tool calling. Returns a plain dict:
+        {"content": str, "tool_calls": [{"id", "type", "function": {...}}]}.
+
+        The full OpenAI-format `messages` list is passed through, so the
+        caller owns conversation state (trajectory) — the router stays
+        stateless apart from cached HTTP clients.
+        """
+        msg = await self._request(
+            system_prompt, messages,
+            complexity=complexity, max_tokens=max_tokens, tools=tools,
+        )
+        return {
+            "content": getattr(msg, "content", None) or "",
+            "tool_calls": _dump_tool_calls(getattr(msg, "tool_calls", None)),
+        }
+
+    # ── Cascade ───────────────────────────────────────────────────────────
+
+    def _provider_sequence(self, complexity: str) -> list:
         preferred = self.config.get("user", {}).get("preferred_ai_model")
         providers = list(_PROVIDER_ORDER)
 
-        # Upgrade route for complex reasoning tasks if cloud is configured
+        # Upgrade route for complex reasoning tasks: prefer cloud providers
+        # (all of them now — local is gone).
         cloud_providers = ["groq", "gemini", "deepseek", "openrouter", "qwen", "kimi"]
         has_configured_cloud = any(self._is_configured(p) for p in cloud_providers)
 
@@ -200,32 +224,36 @@ class ModelRouter:
                 configured_cloud.insert(0, preferred)
             providers = configured_cloud + [p for p in providers if p not in configured_cloud]
         elif preferred and preferred in providers:
-            if preferred in ["local", "ollama"] or self._is_configured(preferred):
+            if self._is_configured(preferred):
                 providers.remove(preferred)
                 providers.insert(0, preferred)
 
-        for provider in providers:
-            try:
-                if provider == "ollama":
-                    if not self._is_configured("ollama"):
-                        continue
-                    return await self._call_ollama(system_prompt, user_message, max_tokens, temperature, keep_alive)
+        return providers
 
-                elif provider == "groq":
+    async def _request(
+        self,
+        system: str,
+        messages: List[dict],
+        complexity: str,
+        max_tokens: int,
+        tools: Optional[List[dict]] = None,
+    ):
+        """Walk the cascade and return the provider's raw `message` object
+        (content + tool_calls). Raises the last provider error if all fail."""
+        temperature = 0.2
+        full_messages = [{"role": "system", "content": system}] + list(messages)
+        last_exc: Optional[Exception] = None
+
+        for provider in self._provider_sequence(complexity):
+            try:
+                if provider == "groq":
                     if not self._is_configured("groq"):
                         continue
-                    return await self._call_groq(system_prompt, user_message, max_tokens, temperature)
-
-                elif provider == "local":
-                    if not self._has_local():
-                        continue
-                    return await self._call_local(system_prompt, user_message, max_tokens, temperature)
-
+                    return await self._call_groq(full_messages, max_tokens, temperature, tools)
                 elif provider in _OPENAI_COMPAT:
                     if not self._is_configured(provider):
                         continue
-                    return await self._call_compat(provider, system_prompt, user_message, max_tokens, temperature)
-
+                    return await self._call_compat(provider, full_messages, max_tokens, temperature, tools)
             except Exception as exc:
                 log.warning("ModelRouter: %s failed (%s), trying next provider.", provider, type(exc).__name__)
                 last_exc = exc
@@ -235,51 +263,28 @@ class ModelRouter:
 
     # ── Provider implementations ──────────────────────────────────────────
 
-    async def _call_ollama(
-        self, system: str, user: str, max_tokens: int, temperature: float, keep_alive: str = "5m"
-    ) -> str:
-        import openai
-        if not self.ollama_client:
-            ollama_cfg = self.config["models"].get("ollama", {})
-            host = ollama_cfg.get("host", "http://localhost:11434/v1")
-            self.ollama_client = openai.AsyncOpenAI(api_key="ollama", base_url=host)
-        ollama_cfg = self.config["models"].get("ollama", {})
-        model = ollama_cfg.get("model", "qwen2.5:0.5b")
-        response = await self.ollama_client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
-            extra_body={"keep_alive": keep_alive},
-        )
-        return response.choices[0].message.content
-
-    async def _call_groq(self, system: str, user: str, max_tokens: int, temperature: float) -> str:
+    async def _call_groq(self, messages, max_tokens, temperature, tools=None):
         from groq import AsyncGroq
         if not self.groq_client:
             api_key = self.config["models"]["groq"]["api_key"]
             self.groq_client = AsyncGroq(api_key=api_key)
-        completion = await self.groq_client.chat.completions.create(
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+        kwargs = dict(
+            messages=messages,
             model=self.config["models"]["groq"]["model"],
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return completion.choices[0].message.content
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+        completion = await self.groq_client.chat.completions.create(**kwargs)
+        return completion.choices[0].message
 
-    async def _call_compat(
-        self, provider: str, system: str, user: str, max_tokens: int, temperature: float
-    ) -> str:
+    async def _call_compat(self, provider, messages, max_tokens, temperature, tools=None):
         """Handle all OpenAI-compatible cloud providers (openrouter, qwen, deepseek, gemini, kimi)."""
         import openai
         if provider not in self._compat_clients:
-            cfg = self.config["models"].get(provider, {})
+            cfg = self.config.get("models", {}).get(provider, {})
             prov_def = _OPENAI_COMPAT[provider]
             self._compat_clients[provider] = openai.AsyncOpenAI(
                 api_key=cfg.get("api_key"),
@@ -287,32 +292,33 @@ class ModelRouter:
                 default_headers=prov_def.get("extra_headers", {}),
             )
         client = self._compat_clients[provider]
-        cfg = self.config["models"].get(provider, {})
+        cfg = self.config.get("models", {}).get(provider, {})
         prov_def = _OPENAI_COMPAT[provider]
         model = cfg.get("model", prov_def["default_model"])
-        response = await client.chat.completions.create(
+        kwargs = dict(
             model=model,
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        return response.choices[0].message.content
+        if tools:
+            kwargs["tools"] = tools
+            kwargs["tool_choice"] = "auto"
+        response = await client.chat.completions.create(**kwargs)
+        return response.choices[0].message
 
     async def _call_gemini_vision(self, system: str, user: str, image_data: bytes = None) -> str:
         import openai, base64
         if "gemini" not in self._compat_clients:
-            cfg = self.config["models"].get("gemini", {})
+            cfg = self.config.get("models", {}).get("gemini", {})
             prov_def = _OPENAI_COMPAT["gemini"]
             self._compat_clients["gemini"] = openai.AsyncOpenAI(
                 api_key=cfg.get("api_key"),
                 base_url=prov_def["base_url"],
             )
         client = self._compat_clients["gemini"]
-        cfg = self.config["models"].get("gemini", {})
-        model = cfg.get("model", "gemini-2.0-flash")
+        cfg = self.config.get("models", {}).get("gemini", {})
+        model = cfg.get("model", "gemini-2.5-flash")
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},
@@ -329,47 +335,32 @@ class ModelRouter:
             temperature=0.2,
             max_tokens=512,
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content or ""
 
-    async def _call_local(self, system: str, user: str, max_tokens: int, temperature: float) -> str:
-        # llama-server sidecar (see start.sh) — OpenAI-compatible, model stays
-        # loaded in RAM so calls cost seconds, not a 1GB reload per message.
-        import openai
-        local_cfg = self.config.get("models", {}).get("local", {})
-        server_url = local_cfg.get("server_url", "http://127.0.0.1:8081/v1")
-        if "local" not in self._compat_clients:
-            self._compat_clients["local"] = openai.AsyncOpenAI(
-                api_key="local",
-                base_url=server_url,
-                timeout=120.0,
-            )
-        client = self._compat_clients["local"]
-        response = await client.chat.completions.create(
-            model=local_cfg.get("model", "local"),
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": user},
-            ],
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        return self._strip_think(response.choices[0].message.content or "")
 
-    @staticmethod
-    def _strip_think(text: str) -> str:
-        """Remove Qwen3 <think>...</think> reasoning blocks. llama-server is
-        launched with --reasoning-budget 0, but this is the safety net — a
-        leaked think block breaks 16-token intent classification entirely."""
-        import re
-        text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL)
-        # Unclosed opening tag (response truncated by max_tokens)
-        if "<think>" in text:
-            text = text.split("<think>", 1)[0]
-        # --reasoning-budget 0 suppresses the opening <think> tag but still
-        # emits the closing one — strip a bare leading </think> plus any
-        # blank line after it (observed live: leaks into every field a
-        # skill builds from a raw router.query() call, e.g. keyword lists).
-        text = text.strip()
-        if text.startswith("</think>"):
-            text = text[len("</think>"):].lstrip("\n").strip()
-        return text
+def _dump_tool_calls(tool_calls) -> list:
+    """Normalize SDK tool_call objects into plain dicts for the agent loop
+    and for re-sending inside assistant messages on the next turn."""
+    out = []
+    for tc in tool_calls or []:
+        if isinstance(tc, dict):
+            fn = tc.get("function") or {}
+            out.append({
+                "id": tc.get("id", ""),
+                "type": "function",
+                "function": {
+                    "name": fn.get("name", ""),
+                    "arguments": fn.get("arguments", "") or "",
+                },
+            })
+        else:
+            fn = getattr(tc, "function", None)
+            out.append({
+                "id": getattr(tc, "id", "") or "",
+                "type": "function",
+                "function": {
+                    "name": getattr(fn, "name", "") or "",
+                    "arguments": getattr(fn, "arguments", "") or "",
+                },
+            })
+    return out

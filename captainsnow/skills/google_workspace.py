@@ -5,6 +5,7 @@ Run once interactively to generate token.pickle, then it auto-refreshes.
 """
 
 import os
+import sys
 import json
 import pickle
 from .base import Skill
@@ -169,6 +170,16 @@ class GoogleWorkspaceSkill(Skill):
                 from google.auth.transport.requests import Request
                 creds.refresh(Request())
             else:
+                # run_local_server blocks waiting for a browser callback — on a
+                # headless deploy with no cached token this hangs the calling
+                # coroutine forever. Fail fast; the token must be seeded by
+                # running the OAuth flow on an interactive machine first.
+                if not sys.stdin.isatty():
+                    raise RuntimeError(
+                        "Google OAuth needs interactive login but no shell is "
+                        "attached. Run once locally to create the token file, "
+                        "then redeploy with it."
+                    )
                 flow = InstalledAppFlow.from_client_secrets_file(creds_path, SCOPES)
                 creds = flow.run_local_server(port=0)
             with open(token_path, "wb") as f:

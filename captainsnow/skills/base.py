@@ -7,6 +7,7 @@ class Skill(ABC):
         self.config = config
         self.router = router
         self.memory = memory
+        self._orchestrator = None
 
     @abstractmethod
     async def execute(self, task: dict) -> str:

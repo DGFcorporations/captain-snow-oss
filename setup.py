@@ -12,6 +12,7 @@ setup(
         # Phase 2
         "duckduckgo-search", "pyairtable", "supabase",
         "google-auth-oauthlib", "google-api-python-client", "googlemaps",
+        "google-genai", "PyGithub", "python-docx", "reportlab",
         # Production runtime
         "fastapi", "uvicorn[standard]",
     ],

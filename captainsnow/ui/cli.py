@@ -39,7 +39,7 @@ def seo(url):
     config = load_config()
     captain = CaptainOrchestrator(config)
     task = {'action': 'audit', 'url': url}
-    result = asyncio.run(run_with_spinner(captain.skills['seo_core'].execute(task), "Running SEO Audit"))
+    result = asyncio.run(run_with_spinner(captain.invoke_skill('seo_core', task), "Running SEO Audit"))
     console.print(result)
 
 @cli.command()
@@ -49,12 +49,9 @@ def agent(agent_type, task_description):
     """Invoke a specific agent directly."""
     config = load_config()
     captain = CaptainOrchestrator(config)
-    if agent_type in captain.skills:
-        task = {'action': 'execute', 'prompt': task_description}
-        result = asyncio.run(run_with_spinner(captain.skills[agent_type].execute(task), f"Running {agent_type} agent"))
-        console.print(result)
-    else:
-        console.print(f"[red]Skill '{agent_type}' is not enabled or does not exist.[/red]")
+    task = {'action': 'execute', 'prompt': task_description}
+    result = asyncio.run(run_with_spinner(captain.invoke_skill(agent_type, task), f"Running {agent_type} agent"))
+    console.print(result)
 
 @cli.command()
 def monitor():
@@ -69,6 +66,23 @@ def serve():
     """Run the FastAPI web UI + Telegram bot together (used by Docker CMD)."""
     from captainsnow.ui.serve import main as serve_main
     serve_main()
+
+@cli.command()
+@click.option('--ping', is_flag=True, help='Make a live ~10-token call per provider.')
+@click.option('--json', 'as_json', is_flag=True, help='Emit JSON instead of a table.')
+def doctor(ping, as_json):
+    """Provider health check — catches free-tier model slug rot."""
+    from core.provider_health import check_config, ping_all, render_table, exit_code
+    config = load_config()
+    rows = check_config(config)
+    if ping:
+        rows = asyncio.run(ping_all(config, rows))
+    if as_json:
+        import json as _json
+        console.print(_json.dumps(rows, indent=2))
+    else:
+        console.print(render_table(rows, ping))
+    sys.exit(exit_code(rows, ping))
 
 def main():
     cli()

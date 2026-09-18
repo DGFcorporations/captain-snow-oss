@@ -212,7 +212,10 @@ class BrowserSkill(Skill):
         """Resolve ENV:VARNAME references to actual environment variable values."""
         if password and password.upper().startswith("ENV:"):
             var_name = password[4:].strip()
-            return os.environ.get(var_name, password)
+            resolved = os.environ.get(var_name)
+            if resolved is None:
+                raise ValueError(f"Environment variable {var_name} is not set.")
+            return resolved
         return password
 
     @staticmethod

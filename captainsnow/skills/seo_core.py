@@ -78,9 +78,14 @@ class SeoCoreSkill(Skill):
     async def _fetch_page_text(self, url: str) -> str:
         # First, try with Playwright (headless) for JavaScript-heavy sites
         try:
-            from skills.browser import BrowserSkill
-            browser = BrowserSkill(self.config, self.router, self.memory)
-            browser_result = await browser.execute({"action": "browse", "prompt": url})
+            if self._orchestrator is not None:
+                browser_result = await self._orchestrator.invoke_skill(
+                    "browser", {"action": "browse", "prompt": url}
+                )
+            else:
+                from skills.browser import BrowserSkill
+                browser = BrowserSkill(self.config, self.router, self.memory)
+                browser_result = await browser.execute({"action": "browse", "prompt": url})
             if "Title:" in browser_result:   # success
                 return browser_result
         except Exception as e:

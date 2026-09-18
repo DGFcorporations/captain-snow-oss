@@ -1,5 +1,5 @@
 """
-Long-running production entry point: runs the FastAPI web UI and the
+Long-running entry point: runs the FastAPI web UI and the
 Telegram bot together under a single asyncio loop, sharing one
 CaptainOrchestrator instance.
 """
@@ -40,11 +40,11 @@ async def _run_web():
 
 async def _amain():
     # Run both forever; if either raises, the other is cancelled and the
-    # process exits — the container runtime (Docker HEALTHCHECK) restarts us.
+    # process exits — the container runtime (and Docker HEALTHCHECK) will restart us.
     web_task = asyncio.create_task(_run_web(), name="web")
     bot_task = asyncio.create_task(run_telegram_bot(orchestrator, config), name="telegram")
 
-    # Graceful shutdown on SIGTERM (sent by the container runtime on redeploy)
+    # Graceful shutdown on SIGTERM (the container runtime sends this on stop/redeploy)
     loop = asyncio.get_running_loop()
     stop = asyncio.Event()
     for sig in (signal.SIGTERM, signal.SIGINT):

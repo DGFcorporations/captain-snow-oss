@@ -18,7 +18,7 @@
 [Skills](#-skills) •
 [Architecture](#-architecture) •
 [Security](#-security-by-default) •
-[Local Inference](#-local-inference-optional) •
+[Testing & Evals](#-testing--evals) •
 [Contributing](#-contributing)
 
 </div>
@@ -37,13 +37,15 @@ Most self-hosted AI agents make you choose between two bad options:
 | **Model quality** | 7B–13B local | GPT-4-class | **70B-class (free tiers)** |
 | **Runs on a phone / Pi** | ❌ | ⚠️ | ✅ |
 
-<sub>*Routes through free-tier cloud providers (Groq, Gemini, OpenRouter, Qwen). DeepSeek/Kimi are near-free paid fallbacks you can enable — or run fully offline with the optional local model.</sub>
+<sub>*Routes through free-tier cloud providers (Groq, Gemini, OpenRouter, Qwen). DeepSeek/Kimi are near-free paid fallbacks you can enable.</sub>
 
-**The trick:** Captain Snow ships **no model at all** by default. Every request cascades through a prioritized chain of *free-tier* cloud LLMs — you get 70B-class reasoning while your hardware just runs a thin async Python process. If every free tier is down or rate-limited, it falls through to near-free paid tiers, and (optionally) a fully-offline local GGUF model as the last line of defense.
+**The trick:** Captain Snow ships **no model at all**. Every request cascades through a prioritized chain of *free-tier* cloud LLMs — you get 70B-class reasoning while your hardware just runs a thin async Python process. If every free tier is down or rate-limited, it falls through to near-free paid tiers. (Local GGUF inference was removed in 0.3.0 — small local models can't reliably drive the tool-calling protocol the whole agent is built on.)
 
 ```
-request ──▶ free tiers (OpenRouter → Qwen → Groq → Gemini) ──▶ near-free (DeepSeek → Kimi) ──▶ local GGUF (optional)
+request ──▶ free tiers (OpenRouter → Qwen → Groq → Gemini) ──▶ near-free (DeepSeek → Kimi)
 ```
+
+Free-tier model slugs rot — providers rename and deprecate them, and a dead slug silently falls through to the next provider. `captainsnow doctor --ping` health-checks every configured provider so you catch rot the week it happens.
 
 ## ⚔️ What he does
 
@@ -106,7 +108,7 @@ TELEGRAM_CHAT_ID=...     # usually the same as owner id
 | `search` | Web search (DuckDuckGo free, Serper optional) |
 | `seo_core` | Full SEO audits: meta, schema, social tags, content quality, keywords |
 | `browser` | Playwright browsing: navigate, scrape, forms, screenshots |
-| `planner` | Multi-step plan generation and execution |
+| `megaplan` | Contract-first multi-phase execution: contract → verified steps → bounded re-plan, every run persisted |
 | `content` | Blog/social drafting + real WordPress/Ghost publishing |
 | `email_ops` | Send and read email |
 | `stripe` | Payments, customers, balances |
@@ -117,6 +119,8 @@ TELEGRAM_CHAT_ID=...     # usually the same as owner id
 | `watchers` | Uptime + data monitoring with Telegram alerts |
 | `revenue_consultant` | Revenue/MRR analysis and consulting prompts |
 | `fileops` | Local file read/write/move |
+| `github_ops` | GitHub repo operations via PyGithub |
+| `file_gen` | Document generation (DOCX, PDF) |
 | `agent_overseer` | Delegation and oversight across skills |
 
 **Adding your own skill** takes one file: subclass `Skill`, implement `async def execute(self, task) -> str`, register the name. That's it — the router does the rest.
@@ -128,34 +132,43 @@ flowchart TD
     U[/"💬 Web UI · Telegram · CLI"/] --> O
 
     subgraph agent ["Captain Snow (~250MB RAM)"]
-        O["🧭 Orchestrator<br/><sub>intent routing + short-term memory</sub>"]
+        O["🧭 Orchestrator<br/><sub>invoke_skill chokepoint + memory</sub>"]
+        L["🔁 Agent Loop<br/><sub>native tool_calls, bounded steps</sub>"]
         M["🧠 Memory<br/><sub>SQLite facts + Chroma recall</sub>"]
         R["📡 Model Router<br/><sub>free-first cascade</sub>"]
-        S["🧩 Skills<br/><sub>16 plug-ins</sub>"]
+        S["🧩 Skills<br/><sub>18 plug-ins</sub>"]
+        O --> L
         O <--> M
-        O --> R
-        O --> S
+        L --> R
+        L -->|"invoke_skill"| S
         S --> R
     end
 
     R --> F["🆓 Free tiers<br/>OpenRouter · Qwen · Groq · Gemini"]
     F -.->|"if exhausted"| P["🪙 Near-free<br/>DeepSeek · Kimi"]
-    P -.->|"if offline"| L["❄️ Local GGUF<br/>(optional sidecar)"]
 ```
+
+The model emits native `tool_calls`; each one dispatches through the orchestrator's `invoke_skill` chokepoint (the single place for guardrails and audit logging), and results thread back as `tool` messages until the model answers in plain text or the step budget runs out.
 
 ```
 captainsnow/
   core/
-    orchestrator.py    # routes each message to a skill or general chat
-    model_router.py    # provider cascade: free cloud → paid cloud → local
+    orchestrator.py    # owns the loop + the invoke_skill chokepoint
+    agent_loop.py      # native tool-calling loop (mini-swe-agent philosophy)
+    tools.py           # enabled skills → OpenAI tool schemas
+    model_router.py    # free-first provider cascade, tool_calls support
+    provider_health.py # `captainsnow doctor` — catches slug rot
     memory.py          # sqlite facts + chroma semantic recall
     profile.py         # config loader, ${ENV_VAR} expansion
   skills/              # one file per capability
   ui/
     web.py             # FastAPI chat endpoint + minimal chat page
     telegram_bot.py    # long-poll bot, owner-only
-    cli.py             # captainsnow chat "..."
+    cli.py             # captainsnow chat / doctor / serve ...
     serve.py           # web + telegram together (Docker entrypoint)
+tests/                 # pytest suite — loop, tools, megaplan, orchestrator
+evals/run_evals.py     # pass^k harness evals, deterministic, no API keys
+scripts/provider_health.py  # standalone doctor script
 ```
 
 ## 🛡 Security by default
@@ -166,17 +179,20 @@ captainsnow/
 - 🧯 **No arbitrary code execution** — deliberately. An LLM writing code + your production credentials in one process is a boarding party waiting to happen. If you need it, build it as a sandboxed add-on.
 - 🤐 **Token-safe logging** — HTTP client logs that would echo bot tokens are suppressed.
 
-## ❄️ Local inference (optional)
-
-Want a zero-API, fully-offline fallback? Build the fat image instead:
+## 🧪 Testing & evals
 
 ```bash
-docker build -f Dockerfile.local -t captain-snow:local .
+pip install pytest
+pytest tests/                    # 18 behavioral tests — loop, tools, megaplan, chokepoint
+python evals/run_evals.py        # pass^k harness evals — deterministic, no API keys needed
+captainsnow doctor --ping        # live health-check of every configured provider
 ```
 
-It compiles `llama-server` from source and bakes in a ~1.1 GB Qwen3-1.7B (Q4_K_M) model. Then uncomment `models.local.server_url` in your config. Budget ~1 GB extra disk and ~1.5–2 GB RAM when the model is loaded.
+The eval suite scores the *harness* (tool dispatch, malformed-argument recovery, step-budget cutoff, plan verify/re-plan) with τ-bench-style pass^k consistency — one lucky pass doesn't count.
 
-Most crews don't need this — the free cloud tiers are faster *and* smarter than any model small enough to hide in a rowboat.
+### ❄️ What happened to local inference?
+
+Removed in 0.3.0. The whole agent now speaks native `tool_calls`, and models small enough to self-host (1–7B) can't drive that protocol reliably — they emit malformed calls often enough to break runs. The free cloud tiers are faster *and* smarter than any model small enough to hide in a rowboat. If a small model ever proves reliable at tool calling, a local provider can come back as an optional fallback.
 
 ## 🗺 Roadmap
 

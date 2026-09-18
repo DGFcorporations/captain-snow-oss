@@ -110,9 +110,13 @@ class SupabaseConnectorSkill(Skill):
                 return "Invalid table name."
             client = self._get_client()
             query = client.table(table).update(data)
+            applied = 0
             for col, val in match.items():
                 if self._is_safe_identifier(col):
                     query = query.eq(col, val)
+                    applied += 1
+            if applied == 0:
+                return "Refusing update: no valid match filter. An unfiltered update would rewrite every row."
             result = query.execute()
             return f"Updated {len(result.data)} record(s) in '{table}'."
         except Exception as e:

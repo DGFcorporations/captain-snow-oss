@@ -1,8 +1,8 @@
 """
 FastAPI web chat UI for Captain Snow.
 
-Serves a minimal chat page at GET / and a JSON chat endpoint at POST /chat
-on port 8000 (put a reverse proxy with HTTPS in front for production).
+Serves a minimal chat page at GET / and a JSON chat endpoint at POST /chat.
+The container publishes port 8000 behind a reverse proxy with auto-HTTPS.
 """
 
 import logging
@@ -23,12 +23,12 @@ orchestrator = CaptainOrchestrator(config)
 
 # The agent holds Stripe/email/Airtable/Supabase credentials — the chat
 # endpoint must not be open to the whole internet. Set CAPTAINSNOW_WEB_TOKEN
-# in the environment; the web UI asks for it once and remembers it.
+# on the host; the web UI asks for it once and remembers it.
 _WEB_TOKEN = os.environ.get("CAPTAINSNOW_WEB_TOKEN", "")
 if not _WEB_TOKEN:
     logging.getLogger("captainsnow.web").warning(
         "CAPTAINSNOW_WEB_TOKEN is not set — POST /chat is UNAUTHENTICATED. "
-        "Set it as an environment variable to lock down the web chat."
+        "Set it in the host environment variables to lock down the web chat."
     )
 
 app = FastAPI(title="Captain Snow", version="0.2.0")

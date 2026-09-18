@@ -6,42 +6,34 @@ user:
 # ── Agent Behavior ──────────────────────────────────────────────────────────
 agent:
   lazy_mode: true          # Zero idle cost — no background LLM calls when quiet
-  ollama_keep_alive: "5m"  # Only used if you run Ollama for local dev
+  max_steps: 24            # tool-call budget per request (agent loop)
 
 # ── Persona ─────────────────────────────────────────────────────────────────
 persona:
   name: "Captain Snow"
   role: "Personal AI assistant and business operator"
-  personality: "Direct, resourceful, and dependable. Gets things done without fuss."
+  personality: "Direct, resourceful, dependable, and methodical. Plans before acting, verifies before declaring victory."
   tone: "Professional but approachable — like a trusted first mate"
   style: "Concise responses. Occasionally uses nautical flavor. Never wastes words."
+  doctrine: "Plan → execute → verify → re-plan if needed. Every claim of done must survive a check."
   owner: "Captain"
 
-# ── LLM Providers ─────────────────────────────────────────────────────────────
-# Default routing is cloud-first: free tiers (OpenRouter/Qwen/Groq/Gemini) are
-# tried before anything paid, and "local" is skipped entirely unless you set
-# models.local.server_url below. This keeps the default footprint tiny —
-# no compiled binary, no multi-GB model file, runs fine on a phone or a $5 VPS.
+# ── LLM Providers (free-first cloud cascade) ──────────────────────────────────
+# Free tiers (OpenRouter/Qwen/Groq/Gemini) are tried before anything paid.
+# Every provider is OpenAI-compatible and supports native tool_calls.
+#
+# NOTE: local GGUF/Ollama inference was removed in 0.3.0 — small local models
+# proved unreliable at tool calling (the agent's core protocol). The whole
+# image is now cloud-only and the footprint stays tiny: no compiled binary,
+# no multi-GB model file, runs fine on a phone or a $5 VPS.
+#
+# Free-tier model slugs rot — providers rename/deprecate them. Run
+# `captainsnow doctor --ping` weekly to catch dead slugs before they
+# silently degrade the cascade.
 #
 # Real secrets come from environment variables. The `${VAR}` syntax is
 # expanded by core/profile.py at load time — never put real keys in this file.
 models:
-  # OPTIONAL — local GGUF inference via a llama-server sidecar. Leave
-  # server_url blank/commented to skip local inference entirely (recommended
-  # default). See Dockerfile.local and the README's "Local inference" section
-  # before enabling this — it adds ~1GB of disk and ~1.5-2GB of RAM.
-  local:
-    model_path: "/app/models/Qwen3-1.7B-Q4_K_M.gguf"
-    # server_url: "http://127.0.0.1:8081/v1"
-    n_ctx: 4096
-    temperature: 0.2
-
-  # Ollama is only used for local dev on a machine that already runs Ollama.
-  # Blank host → skipped automatically.
-  ollama:
-    host: ""
-    model: "qwen2.5:1.5b"
-
   openrouter:
     api_key: "${OPENROUTER_API_KEY}"
     model: "meta-llama/llama-3.3-70b-instruct:free"
@@ -60,15 +52,11 @@ models:
 
   gemini:
     api_key: "${GEMINI_API_KEY}"
-    model: "gemini-2.0-flash"
+    model: "gemini-2.5-flash"
 
   kimi:
     api_key: "${KIMI_API_KEY}"
     model: "moonshot-v1-8k"
-
-  huggingface:
-    api_key: "${HUGGINGFACE_API_KEY}"
-    model: "Qwen/Qwen2.5-Coder-7B-Instruct"
 
 # ── Skills ───────────────────────────────────────────────────────────────────
 # Comment out any you don't need — fewer enabled skills means fewer
@@ -84,7 +72,7 @@ skills:
     - email_ops
     - airtable
     - search
-    - planner
+    - megaplan
     - revenue_consultant
     - supabase_connector
     - google_workspace

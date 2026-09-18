@@ -12,9 +12,9 @@ class StripeSkill(Skill):
         # letting the Stripe SDK return a confusing "Invalid API Key" message.
         if not api_key or "${" in api_key or api_key == "mock_key" or "mock" in api_key.lower():
             return (
-                "Stripe is not configured. Set the STRIPE_API_KEY environment "
-                "variable (value must start with sk_live_ or sk_test_), "
-                "then restart."
+                "Stripe is not configured. Set STRIPE_API_KEY in the host "
+                "environment (value must start with sk_live_ or sk_test_), "
+                "then restart the container."
             )
         if not api_key.startswith(("sk_live_", "sk_test_", "rk_live_", "rk_test_")):
             return (
