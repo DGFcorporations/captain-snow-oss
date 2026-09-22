@@ -15,3 +15,14 @@ google_token.pickle
 .venv/
 venv/
 *.egg-info/
+
+# standard hygiene (added 2026-09-22 audit)
+node_modules/
+dist/
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+_agent-scratch/
+_to_delete/
