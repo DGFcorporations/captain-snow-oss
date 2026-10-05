@@ -41,7 +41,7 @@ COPY setup.py ./
 COPY captainsnow ./captainsnow
 RUN pip install -e . --no-deps
 
-COPY config.yaml ./config.yaml
+COPY config.example.yaml ./config.yaml
 COPY start.sh ./start.sh
 RUN chmod +x ./start.sh
 
