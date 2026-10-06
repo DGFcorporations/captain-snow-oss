@@ -235,17 +235,21 @@ class MemoryBank:
     # ── File Store ────────────────────────────────────────────────────────
 
     async def save_file(self, filename: str, content: bytes):
-        path = self.files_path / filename
+        import os
+        safe_filename = os.path.basename(filename)
+        path = self.files_path / safe_filename
         async with aiofiles.open(path, "wb") as f:
             await f.write(content)
         self.db["file_index"].upsert({
-            "filename": filename,
+            "filename": safe_filename,
             "path": str(path),
             "timestamp": datetime.now().isoformat(),
         }, pk="filename")
 
     def get_file_path(self, filename: str) -> Optional[Path]:
-        path = self.files_path / filename
+        import os
+        safe_filename = os.path.basename(filename)
+        path = self.files_path / safe_filename
         return path if path.exists() else None
 
     # ── Morning Briefing ──────────────────────────────────────────────────
