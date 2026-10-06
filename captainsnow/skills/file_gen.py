@@ -26,8 +26,8 @@ class FileGenSkill(Skill):
                 return {"status": "error", "details": f"Failed to parse file generation payload from: {raw}"}
             data = json.loads(match.group(0))
             
-            filename = data.get("filename", "document").replace(" ", "_")
-            fmt = data.get("format", "pdf").lower()
+            filename = os.path.basename(data.get("filename", "document")).replace(" ", "_")
+            fmt = "".join(c for c in data.get("format", "pdf").lower() if c.isalnum())
             content = data.get("content", "Empty document.")
             
             reports_dir = self.config.get("reports_dir", "./reports")
