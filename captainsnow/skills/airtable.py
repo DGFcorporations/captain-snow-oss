@@ -94,9 +94,13 @@ class AirtableSkill(Skill):
             api, base_id = self._get_client()
             table = api.table(base_id, table_name)
             records = table.all()
+            # ⚡ Bolt: Pre-compute the lowercased keyword outside the loop
+            # to avoid calling .lower() on the loop invariant for every field of every record.
+            # Reduces redundant string transformations significantly on large tables.
+            kw_lower = keyword.lower()
             matches = [
                 r for r in records
-                if any(keyword.lower() in str(v).lower() for v in r.get("fields", {}).values())
+                if any(kw_lower in str(v).lower() for v in r.get("fields", {}).values())
             ]
             if not matches:
                 return f"No records matching '{keyword}' in {table_name}."
