@@ -1,0 +1,4 @@
+## 2025-01-20 - Fix path traversal in fileops skill
+**Vulnerability:** The `FileopsSkill` was performing file system operations (`_create_file`, `_read_file`, `_list_files`) using raw, unvalidated file paths provided by LLM output or user prompts. This allowed arbitrary reads and writes outside the project directory by supplying relative paths like `../../../etc/passwd`.
+**Learning:** File path parameters originating from or processed by LLMs should always be treated as untrusted user input, requiring explicit boundary checks before being passed to `os` or `aiofiles` functions. Simple `.replace()` or string stripping is insufficient protection.
+**Prevention:** Implement a standard `_get_safe_path` validator using `Path(path).resolve().is_relative_to(base_dir)` to ensure all file paths remain within an approved base directory sandbox before executing filesystem operations.
