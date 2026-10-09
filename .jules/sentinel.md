@@ -1,0 +1,4 @@
+## 2026-10-09 - [Path Traversal in FileopsSkill]
+**Vulnerability:** Path traversal vulnerability in `captainsnow/skills/fileops.py` allows reading and writing arbitrary files on the host filesystem via unvalidated file paths in `_create_file` and `_read_file` functions.
+**Learning:** Even internal AI agent file operation skills require strict directory boundary checks. User-supplied paths were directly concatenated without verifying they reside inside the allowed workspace directory.
+**Prevention:** Always validate file paths by resolving them to absolute paths and checking if they are relative to the allowed base directory (e.g., using `path.resolve().is_relative_to(base_dir.resolve())`) before performing any file operations.
