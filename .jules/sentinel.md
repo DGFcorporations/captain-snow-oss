@@ -1,0 +1,4 @@
+## 2025-02-14 - Fix Path Traversal in Fileops Skill
+**Vulnerability:** The FileopsSkill took raw file paths provided in natural language prompts and passed them directly to `aiofiles.open()` without resolving or validating them against a safe base directory. This allowed path traversal to read or write any file accessible by the application outside the repository root.
+**Learning:** Skills processing dynamic paths from unstructured inputs (LLM outputs or user prompts) must normalize and bound those paths. `Path(raw_path).resolve().is_relative_to(base_dir)` provides a robust way to implement this safety check.
+**Prevention:** Always implement path validation for any agent skill that interacts with the filesystem. Centralize this check in a helper method and never trust the input path string. Ensure the safe boundary (e.g. `Path.cwd().resolve()`) is correctly resolved before checking paths against it.
