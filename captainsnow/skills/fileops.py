@@ -23,14 +23,24 @@ class FileopsSkill(Skill):
             return "Format: create file PATH with content CONTENT"
         path_part = parts[0].replace("create file", "").strip()
         content = parts[1].strip()
-        path = Path(path_part)
+
+        path = Path(path_part).resolve()
+        cwd = Path.cwd().resolve()
+        if not path.is_relative_to(cwd):
+            return "Error: Path traversal detected."
+
         path.parent.mkdir(parents=True, exist_ok=True)
         async with aiofiles.open(path, 'w') as f:
             await f.write(content)
         return f"File created: {path}"
 
     async def _read_file(self, prompt: str) -> str:
-        path = prompt.replace("read file", "").strip()
+        path_part = prompt.replace("read file", "").strip()
+        path = Path(path_part).resolve()
+        cwd = Path.cwd().resolve()
+        if not path.is_relative_to(cwd):
+            return "Error: Path traversal detected."
+
         try:
             async with aiofiles.open(path, 'r') as f:
                 content = await f.read()
