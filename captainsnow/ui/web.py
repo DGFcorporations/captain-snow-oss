@@ -7,7 +7,6 @@ The container publishes port 8000 behind a reverse proxy with auto-HTTPS.
 
 import logging
 import os
-import secrets
 
 from fastapi import FastAPI, Header, HTTPException
 from fastapi.responses import HTMLResponse
@@ -16,6 +15,7 @@ from pydantic import BaseModel
 
 from core.orchestrator import CaptainOrchestrator
 from core.profile import load_config
+from ui.auth import chat_auth_failure_status
 
 
 config = load_config()
@@ -27,8 +27,8 @@ orchestrator = CaptainOrchestrator(config)
 _WEB_TOKEN = os.environ.get("CAPTAINSNOW_WEB_TOKEN", "")
 if not _WEB_TOKEN:
     logging.getLogger("captainsnow.web").warning(
-        "CAPTAINSNOW_WEB_TOKEN is not set — POST /chat is UNAUTHENTICATED. "
-        "Set it in the host environment variables to lock down the web chat."
+        "CAPTAINSNOW_WEB_TOKEN is not set — POST /chat will reject requests. "
+        "Set it in the host environment variables to enable the web chat."
     )
 
 app = FastAPI(title="Captain Snow", version="0.2.0")
@@ -60,10 +60,10 @@ async def health():
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest, authorization: str = Header(default="")):
-    if _WEB_TOKEN:
-        supplied = authorization.removeprefix("Bearer ").strip()
-        if not secrets.compare_digest(supplied, _WEB_TOKEN):
-            raise HTTPException(status_code=401, detail="invalid or missing token")
+    auth_failure = chat_auth_failure_status(_WEB_TOKEN, authorization)
+    if auth_failure:
+        detail = "web chat authentication is not configured" if auth_failure == 503 else "invalid or missing token"
+        raise HTTPException(status_code=auth_failure, detail=detail)
     text = (req.message or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="message is required")

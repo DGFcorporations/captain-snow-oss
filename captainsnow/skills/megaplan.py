@@ -182,9 +182,8 @@ class MegaplanSkill(Skill):
             reason = raw.split(" ", 1)[1].strip() if " " in raw else ""
             return verdict, reason
         except Exception:
-            # Verification itself failed — accept the step rather than
-            # burning the whole run on a flaky check call.
-            return True, "verifier unavailable — accepted"
+            # Verification failures must not be mistaken for successful work.
+            return False, "verifier unavailable — rejected"
 
     # ── Phase 4: persist ────────────────────────────────────────────────
 

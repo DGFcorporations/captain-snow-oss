@@ -93,3 +93,14 @@ def test_no_orchestrator_reference_errors_in_step(tmp_cwd):
     skill = MegaplanSkill({}, router, _Memory(tmp_cwd))  # _orchestrator stays None
     out = asyncio.run(skill.execute({"prompt": "goal"}))
     assert "no orchestrator reference" in out
+
+
+def test_verifier_exception_fails_closed(tmp_path):
+    class _BrokenVerifier:
+        async def query(self, *args, **kwargs):
+            raise RuntimeError("verification unavailable")
+
+    skill = MegaplanSkill({}, _BrokenVerifier(), _Memory(tmp_path))
+    verdict, reason = asyncio.run(skill._verify_step("do work", "check work", "done"))
+    assert verdict is False
+    assert "unavailable" in reason
