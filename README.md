@@ -187,7 +187,7 @@ scripts/provider_health.py  # standalone doctor script
 
 ## Security by Default
 
-- **Web Chat Authentication:** Setting `CAPTAINSNOW_WEB_TOKEN` requires a Bearer token for the `/chat` endpoint.
+- **Web Chat Authentication:** `/chat` always requires a Bearer token matching `CAPTAINSNOW_WEB_TOKEN`; if the variable is unset, requests are rejected until it is configured.
 - **Telegram Access Control:** Without `TELEGRAM_OWNER_ID`, the bot will not reply to any messages.
 - **Environment Secrets:** `config.yaml` uses `${ENV_VAR}` expansion to prevent secrets from being stored in the configuration file.
 - **No Arbitrary Code Execution:** Code execution is deliberately excluded to prevent security vulnerabilities.

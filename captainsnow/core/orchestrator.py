@@ -1,4 +1,5 @@
 import importlib
+import json
 import time
 from collections import deque
 from typing import Dict
@@ -59,12 +60,7 @@ class CaptainOrchestrator:
         return "\n".join(lines)
 
     def _load_skills(self):
-        enabled = self.config.get("skills", {}).get("enabled", [])
-        # Force add the new skills if not explicitly disabled
-        if "github_ops" not in enabled: enabled.append("github_ops")
-        if "file_gen" not in enabled: enabled.append("file_gen")
-        if "megaplan" not in enabled and "planner" not in enabled:
-            enabled.append("megaplan")
+        enabled = self.config.get("skills", {}).get("enabled", []) or []
 
         for skill_name in enabled:
             if skill_name not in _SKILL_REGISTRY:
@@ -136,15 +132,26 @@ class CaptainOrchestrator:
         started = time.monotonic()
         if skill_name not in self.skills:
             result = f"Skill '{skill_name}' is not enabled or does not exist."
+            succeeded = False
         else:
             try:
-                result = await self.skills[skill_name].execute(task)
+                raw_result = await self.skills[skill_name].execute(task)
+                if isinstance(raw_result, str):
+                    result = raw_result
+                else:
+                    result = json.dumps(raw_result, ensure_ascii=False, sort_keys=True, default=str)
+                succeeded = not result.startswith("Error")
+                if isinstance(raw_result, dict):
+                    status = str(raw_result.get("status", "")).lower()
+                    if status in {"error", "failed", "failure"}:
+                        succeeded = False
             except Exception as e:
                 result = f"Error executing skill {skill_name}: {e}"
+                succeeded = False
         self.call_log.append({
             "ts": time.time(),
             "skill": skill_name,
-            "ok": not result.startswith("Error"),
+            "ok": succeeded,
             "elapsed_s": round(time.monotonic() - started, 3),
             "result_len": len(result),
         })

@@ -78,6 +78,9 @@ skills:
     - google_workspace
     - route_optimizer
 
+fileops:
+  root: "./captainsnow_files"
+
 # ── Integrations ─────────────────────────────────────────────────────────────
 integrations:
   stripe:
