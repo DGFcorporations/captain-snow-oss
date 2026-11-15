@@ -16,6 +16,12 @@ class FileopsSkill(Skill):
         else:
             return "File operation not understood."
 
+    def _is_safe_path(self, path: Path) -> bool:
+        """Security: Ensure file paths do not traverse outside the repository root."""
+        base = Path.cwd().resolve()
+        resolved_path = path.resolve()
+        return resolved_path.is_relative_to(base)
+
     async def _create_file(self, prompt: str) -> str:
         # Expect: "create file path/to/file.txt with content Hello world"
         parts = prompt.split("with content")
@@ -24,13 +30,22 @@ class FileopsSkill(Skill):
         path_part = parts[0].replace("create file", "").strip()
         content = parts[1].strip()
         path = Path(path_part)
+
+        if not self._is_safe_path(path):
+            return "Security Error: Path traversal detected. Operations outside repository root are forbidden."
+
         path.parent.mkdir(parents=True, exist_ok=True)
         async with aiofiles.open(path, 'w') as f:
             await f.write(content)
         return f"File created: {path}"
 
     async def _read_file(self, prompt: str) -> str:
-        path = prompt.replace("read file", "").strip()
+        path_str = prompt.replace("read file", "").strip()
+        path = Path(path_str)
+
+        if not self._is_safe_path(path):
+            return "Security Error: Path traversal detected. Operations outside repository root are forbidden."
+
         try:
             async with aiofiles.open(path, 'r') as f:
                 content = await f.read()
