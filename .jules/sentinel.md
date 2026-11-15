@@ -1,0 +1,4 @@
+## 2023-10-18 - Prevent Path Traversal in FileopsSkill
+**Vulnerability:** The FileopsSkill (`captainsnow/skills/fileops.py`) allowed unrestricted read, write, and list operations on arbitrary paths via path traversal vulnerabilities (e.g., `../../../etc/passwd`), exposing the system to unauthorized access.
+**Learning:** This existed because file paths provided via user input (e.g., in prompts) were directly passed to file I/O operations (`aiofiles.open`, `os.listdir`) without verifying if they resolved to a path within the intended workspace root (`Path.cwd()`).
+**Prevention:** Always use `pathlib.Path(user_input).resolve()` to compute the absolute path and verify it is within the allowed base directory using `path.is_relative_to(Path.cwd().resolve())` before executing any file operations.
