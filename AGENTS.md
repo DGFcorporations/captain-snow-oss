@@ -1,5 +1,8 @@
 # captain-snow-oss — AI Agent & Developer Guidelines
 
+## 0. OWNER ANSWER FORMAT (GLOBAL LAW — ALL REPLIES TO CHANDLER)
+Every reply to Chandler must use precise natural language, bold header titles numbered in order of importance (`## **1. ...**`), sharp single-idea bullet points with verified exact numbers, and exact open questions with instructions on how to answer and concrete labeled options (`1A`, `1B`, `1C`). NEVER reply with raw file paths/links, internal IDs (commit hashes, queue IDs, standard IDs, work-order codes, DB/Qdrant IDs), raw log dumps, prose paragraphs, or large code blocks. Basic answers stay text-only; final deliverables and major handoffs use interactive dashboards paired with precise graphics, infographics, graphs, and side-by-side comparisons.
+
 Repository: https://github.com/DGFcorporations/captain-snow-oss.git
 
 ## Purpose
